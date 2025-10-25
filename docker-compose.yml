@@ -1,15 +1,14 @@
-version: '3.8'
-
-services: 
-  webui:
+version: "3.8"
+services:
+  anon-chat:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - MODEL_PATH=/app/api/models/model.bin
+      - MAX_REQ_PER_MIN=40
     volumes:
-      - ./data:/srv/data
-      - ./data/.nomic:/root/.nomic/
-      - ./models:/srv/models
-      - ./configs:/srv/configs
-      - ./personalities:/srv/personalities
-    ports: 
-      - "9600:9600"
+      - ./api/models:/app/api/models:ro
+    ports:
+      - "127.0.0.1:8080:8080" # bind only to localhost — Tor will proxy to it

@@ -1,16 +1,25 @@
-FROM python:3.10
+# Multi-stage: build frontend, then runtime image with Python + built frontend
+FROM node:18-alpine AS frontend-build
+WORKDIR /build-frontend
+COPY frontend/ ./frontend/
+WORKDIR /build-frontend/frontend
+RUN npm ci --silent && npm run build
 
-WORKDIR /srv
-COPY ./requirements.txt .
+FROM python:3.11-slim
+WORKDIR /app
 
-RUN python3 -m venv venv && . venv/bin/activate
-RUN python3 -m pip install --no-cache-dir -r requirements.txt --upgrade pip
+RUN apt-get update && apt-get install -y --no-install-recommends 
+    build-essential curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY ./app.py /srv/app.py
-COPY ./gpt4all_api /srv/gpt4all_api
-COPY ./backends /srv/backends
-COPY ./static /srv/static
-COPY ./templates /srv/templates
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# COPY ./models /srv/models  # Mounting model is more efficient
-CMD ["python", "app.py", "--host", "0.0.0.0", "--port", "9600", "--db_path", "data/database.db"]
+COPY api/ ./api
+COPY --from=frontend-build /build-frontend/frontend/dist ./frontend/dist
+
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn api.stateless_proxy:app --host 0.0.0.0 --port ${PORT} --proxy-headers"]
